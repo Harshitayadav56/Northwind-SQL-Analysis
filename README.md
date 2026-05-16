@@ -120,52 +120,69 @@ GROUP BY year_, month_, o.employeeID
 ORDER BY year_, month_, o.employeeID;
 
 # 8. Shipping company handling most high-value orders (>500)
-WITH above_500_orders AS (
-SELECT
-od.orderID,
-SUM(od.quantity * od.unitPrice * (1 - od.discount)) AS total_order_value
-FROM order_details od
-GROUP BY od.orderID
-HAVING total_order_value > 500
+WITH above_500ordervalue AS (
+    SELECT 
+        od.orderID, 
+        SUM(od.unitPrice * od.quantity * (1 - od.discount)) AS order_value
+    FROM order_details od
+    GROUP BY od.orderID
+    HAVING order_value > 500
 )
-SELECT
-o.shipperID,
-COUNT(*) AS high_value_orders
-FROM above_500_orders a5o
-JOIN orders o
-ON a5o.orderID = o.orderID
-GROUP BY o.shipperID
+
+SELECT 
+    s.companyName,
+    COUNT(*) AS high_value_orders
+FROM orders o
+JOIN above_500ordervalue a50
+ON o.orderID = a50.orderID
+JOIN shippers s
+ON o.shipperID = s.shipperID
+GROUP BY s.companyName
 ORDER BY high_value_orders DESC;
 
 # 9. Top employee by revenue in each category
 WITH cat_emp_sales AS (
-SELECT
-cat.categoryID,
-e.employeeID,
-SUM(od.quantity * od.unitPrice * (1 - od.discount)) AS emp_cat_sales
-FROM categories cat
-JOIN products p ON cat.categoryID = p.categoryID
-JOIN order_details od ON od.productID = p.productID
-JOIN orders o ON o.orderID = od.orderID
-JOIN employees e ON e.employeeID = o.employeeID
-GROUP BY cat.categoryID, e.employeeID
+    SELECT 
+        c.categoryID,
+        c.categoryName,
+        e.employeeID,
+        e.employeeName,
+        SUM(od.quantity * od.unitPrice * (1 - od.discount)) AS emp_cat_sales
+    FROM categories c
+    JOIN products p 
+        ON c.categoryID = p.categoryID
+    JOIN order_details od 
+        ON p.productID = od.productID
+    JOIN orders o 
+        ON od.orderID = o.orderID
+    JOIN employees e 
+        ON o.employeeID = e.employeeID
+    GROUP BY 
+        c.categoryID,
+        c.categoryName,
+        e.employeeID,
+        e.employeeName
+),
+
+cat_max_sales AS (
+    SELECT 
+        categoryID,
+        MAX(emp_cat_sales) AS max_sales
+    FROM cat_emp_sales
+    GROUP BY categoryID
 )
-SELECT
-ces.categoryID,
-ces.employeeID,
-e.employeeName
+
+SELECT 
+    ces.categoryID,
+    ces.categoryName,
+    ces.employeeID,
+    ces.employeeName,
+    ces.emp_cat_sales
 FROM cat_emp_sales ces
-JOIN (
-SELECT
-categoryID,
-MAX(emp_cat_sales) AS max_sales
-FROM cat_emp_sales
-GROUP BY categoryID
-) AS cat_max_sales
-ON ces.categoryID = cat_max_sales.categoryID
-AND ces.emp_cat_sales = cat_max_sales.max_sales
-JOIN employees e
-ON e.employeeID = ces.employeeID;
+JOIN cat_max_sales cms
+    ON ces.categoryID = cms.categoryID
+    AND ces.emp_cat_sales = cms.max_sales
+ORDER BY ces.categoryID;
 
 # 📈 Business Insights
 
